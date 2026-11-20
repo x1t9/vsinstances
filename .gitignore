@@ -1,0 +1,16 @@
+# Ignore core VS Code portable folder
+vscode/
+vscode_update_temp/
+vscode_portable_temp.zip
+vscode_update.zip
+
+# Ignore instance personal data, caches, workspaces & isolated extension downloads
+**/user-data/
+**/extensions/
+!vscode/data/extensions/
+
+# Temporary and IDE files
+*.tmp
+*.log
+.vs/
+.vscode/
