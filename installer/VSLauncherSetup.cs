@@ -75,7 +75,7 @@ namespace VSLauncherInstaller
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher Setup v1.1";
+            this.Text = "VS Launcher Setup v1.1.1";
             this.Size = new Size(540, 420);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -95,7 +95,7 @@ namespace VSLauncherInstaller
 
             Label lblTitle = new Label
             {
-                Text = "VS Launcher Setup v1.1",
+                Text = "VS Launcher Setup v1.1.1",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(14, 10),
@@ -104,7 +104,7 @@ namespace VSLauncherInstaller
 
             Label lblSubtitle = new Label
             {
-                Text = "Install VS Launcher v1.1 with isolated instance profiles",
+                Text = "Install VS Launcher v1.1.1 with isolated instance profiles",
                 ForeColor = Color.FromArgb(170, 170, 170),
                 Font = new Font("Segoe UI", 8.5F),
                 Location = new Point(16, 36),

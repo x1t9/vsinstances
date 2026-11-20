@@ -191,7 +191,7 @@ namespace VSLauncher
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher v1.1 (Administrator)";
+            this.Text = "VS Launcher v1.1.1 (Administrator)";
             this.Size = new Size(930, 550);
             this.MinimumSize = new Size(840, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -217,7 +217,7 @@ namespace VSLauncher
 
             lblTitle = new Label
             {
-                Text = "VS Launcher v1.1",
+                Text = "VS Launcher v1.1.1",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(0, 9),
@@ -1448,17 +1448,33 @@ namespace VSLauncher
         private void CopyDirectoryContentsIfMissing(string sourceDir, string targetDir)
         {
             Directory.CreateDirectory(targetDir);
-            foreach (string sourceFile in Directory.GetFiles(sourceDir))
+            ProcessStartInfo psi = new ProcessStartInfo
             {
-                string targetFile = Path.Combine(targetDir, Path.GetFileName(sourceFile));
-                if (!File.Exists(targetFile) && !Directory.Exists(targetFile))
-                    File.Copy(sourceFile, targetFile);
+                FileName = "robocopy.exe",
+                Arguments = string.Format("\"{0}\" \"{1}\" /E /COPY:DAT /DCOPY:DAT /R:1 /W:1 /XJ /XC /XN /XO /NFL /NDL /NJH /NJS /NP", sourceDir, targetDir),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
+            Process copyProcess;
+            try
+            {
+                copyProcess = Process.Start(psi);
             }
-            foreach (string sourceSubDir in Directory.GetDirectories(sourceDir))
+            catch (System.ComponentModel.Win32Exception ex)
             {
-                string targetSubDir = Path.Combine(targetDir, Path.GetFileName(sourceSubDir));
-                if (!File.Exists(targetSubDir))
-                    CopyDirectoryContentsIfMissing(sourceSubDir, targetSubDir);
+                throw new IOException("Could not start Robocopy to migrate VS Code data.", ex);
+            }
+
+            using (Process process = copyProcess)
+            {
+                if (process == null)
+                    throw new InvalidOperationException("Could not start Robocopy to migrate VS Code data.");
+
+                process.WaitForExit();
+                if (process.ExitCode >= 8)
+                    throw new IOException(string.Format("Robocopy could not migrate '{0}' to '{1}' (exit code {2}).", sourceDir, targetDir, process.ExitCode));
             }
         }
 
