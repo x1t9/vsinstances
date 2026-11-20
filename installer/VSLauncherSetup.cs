@@ -332,7 +332,8 @@ namespace VSLauncherInstaller
                     + "Welcome to VS Launcher! To get started:\r\n"
                     + "1. Launch Launcher.exe\r\n"
                     + "2. Click 'Install VS Code' in the top-right header to automatically download and unpack the portable VS Code core.\r\n"
-                    + "3. Create or launch instances with shared or isolated extensions!\r\n";
+                    + "3. Create or launch instances with shared or isolated extensions.\r\n\r\n"
+                    + "Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
                 File.WriteAllText(Path.Combine(dest, "README.md"), readmeContent);
 
                 // 5. Create Desktop shortcut

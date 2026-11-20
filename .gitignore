@@ -14,3 +14,5 @@ vscode_update.zip
 *.log
 .vs/
 .vscode/
+bin/
+obj/

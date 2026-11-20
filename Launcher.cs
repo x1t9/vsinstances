@@ -87,6 +87,11 @@ namespace VSLauncher
             UserDataSize = -1;
             ExtensionsSize = -1;
         }
+
+        public override string ToString()
+        {
+            return Name;
+        }
     }
 
     public class MainForm : Form
@@ -121,6 +126,8 @@ namespace VSLauncher
         private Button btnShortcut;
         private Button btnDelete;
         private Button btnRefresh;
+        private Button btnRename;
+        private Button btnChangeExtensionMode;
 
         // Create Instance controls
         private TextBox txtNewName;
@@ -139,6 +146,7 @@ namespace VSLauncher
         private ToolStripStatusLabel lblStatus;
         private ToolStripProgressBar progressBar;
         private ToolStripStatusLabel lblRoot;
+        private ToolStripStatusLabel lblAbout;
 
         private Icon appIcon;
 
@@ -278,11 +286,30 @@ namespace VSLauncher
             this.Controls.Add(pnlHeader);
 
             // Status Strip
-            statusStrip = new StatusStrip { BackColor = Color.FromArgb(238, 239, 242) };
+            statusStrip = new StatusStrip { BackColor = Color.FromArgb(238, 239, 242), ShowItemToolTips = true };
             lblStatus = new ToolStripStatusLabel { Text = "Ready", Spring = false };
             progressBar = new ToolStripProgressBar { Visible = false, Width = 130, Height = 14 };
             lblRoot = new ToolStripStatusLabel { Text = rootDir, Spring = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.Gray };
-            statusStrip.Items.AddRange(new ToolStripItem[] { lblStatus, progressBar, lblRoot });
+            lblAbout = new ToolStripStatusLabel
+            {
+                Text = "(i)",
+                IsLink = true,
+                ToolTipText = "Vibe coded by x1t9",
+                ForeColor = Color.FromArgb(0, 102, 204),
+                Padding = new Padding(6, 0, 4, 0)
+            };
+            lblAbout.Click += (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo("https://github.com/x1t9/vsinstances") { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not open the VS Launcher repository: " + ex.Message, "Open Repository", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+            statusStrip.Items.AddRange(new ToolStripItem[] { lblStatus, progressBar, lblRoot, lblAbout });
             this.Controls.Add(statusStrip);
 
             // Main Content Area
@@ -507,7 +534,7 @@ namespace VSLauncher
             Panel pnlListActions = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 36,
+                Height = 68,
                 Padding = new Padding(0, 4, 0, 0)
             };
             gbInstances.Controls.Add(pnlListActions);
@@ -572,7 +599,30 @@ namespace VSLauncher
                 CheckOnlineVersion(true);
             };
 
-            pnlListActions.Controls.AddRange(new Control[] { btnLaunch, btnOpenFolder, btnShortcut, btnDelete, btnRefresh });
+            btnRename = new Button
+            {
+                Text = "Rename Selected",
+                Size = new Size(125, 28),
+                Location = new Point(0, 36),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnRename.Click += (s, e) => RenameSelectedInstance();
+
+            btnChangeExtensionMode = new Button
+            {
+                Text = "Change Extension Mode",
+                Size = new Size(165, 28),
+                Location = new Point(130, 36),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnChangeExtensionMode.Click += (s, e) => ChangeSelectedExtensionMode();
+
+            pnlListActions.Controls.AddRange(new Control[] {
+                btnLaunch, btnOpenFolder, btnShortcut, btnDelete, btnRefresh,
+                btnRename, btnChangeExtensionMode
+            });
 
             // Compact ListView
             lvInstances = new ListView
@@ -846,15 +896,19 @@ namespace VSLauncher
                         nextIndex = idx + 1;
                 }
 
-                // Detect extension mode
+                string instanceName = dirName;
                 string extMode = "Shared";
                 if (hasJson)
                 {
                     try
                     {
                         string json = File.ReadAllText(jsonPath);
+                        Match nameMatch = Regex.Match(json, "\"name\"\\s*:\\s*\"([^\"\\\\]*)\"");
+                        if (nameMatch.Success && !string.IsNullOrWhiteSpace(nameMatch.Groups[1].Value))
+                            instanceName = nameMatch.Groups[1].Value;
                         if (json.Contains("\"isolated-copy\"")) extMode = "Isolated (Copy)";
-                        else if (json.Contains("\"isolated-empty\"") || json.Contains("\"isolated\"")) extMode = "Isolated (Empty)";
+                        else if (json.Contains("\"isolated-empty\"")) extMode = "Isolated (Empty)";
+                        else if (json.Contains("\"isolated\"")) extMode = "Isolated (Custom)";
                         else if (json.Contains("\"shared\"")) extMode = "Shared";
                     }
                     catch { }
@@ -895,7 +949,7 @@ namespace VSLauncher
 
                 InstanceInfo info = new InstanceInfo
                 {
-                    Name = dirName,
+                    Name = instanceName,
                     DirectoryPath = dir,
                     ExtensionMode = extMode,
                     BatPath = batPath,
@@ -912,7 +966,7 @@ namespace VSLauncher
                 item.Tag = info;
 
                 lvInstances.Items.Add(item);
-                cbCloneSource.Items.Add(info.Name);
+                cbCloneSource.Items.Add(info);
             }
 
             if (cbCloneSource.Items.Count > 0)
@@ -1120,6 +1174,214 @@ namespace VSLauncher
             }
         }
 
+        private void RenameSelectedInstance()
+        {
+            if (lvInstances.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("Please select an instance to rename.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            InstanceInfo info = lvInstances.SelectedItems[0].Tag as InstanceInfo;
+            if (info == null) return;
+
+            string newName = PromptForInstanceName(info.Name);
+            if (newName == null || newName.Equals(info.Name, StringComparison.Ordinal)) return;
+
+            if (string.IsNullOrWhiteSpace(newName) || newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || newName.IndexOfAny(new char[] { '"', '\\', '\r', '\n' }) >= 0)
+            {
+                MessageBox.Show("Instance name contains invalid characters.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            foreach (ListViewItem item in lvInstances.Items)
+            {
+                InstanceInfo other = item.Tag as InstanceInfo;
+                if (other != null && other != info && other.Name.Equals(newName, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("Another instance already uses that name.", "Name Already Exists", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            try
+            {
+                string json = File.ReadAllText(info.JsonPath);
+                File.WriteAllText(info.JsonPath, ReplaceJsonStringProperty(json, "name", newName), new UTF8Encoding(false));
+                lblStatus.Text = string.Format("Renamed instance to '{0}'.", newName);
+                RefreshInstances();
+                SelectInstanceByName(newName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to rename instance: " + ex.Message, "Rename Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private string PromptForInstanceName(string currentName)
+        {
+            using (Form dialog = new Form())
+            using (TextBox nameBox = new TextBox())
+            using (Button okButton = new Button())
+            using (Button cancelButton = new Button())
+            {
+                dialog.Text = "Rename Instance";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.ClientSize = new Size(340, 96);
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+                dialog.ShowInTaskbar = false;
+
+                nameBox.Text = currentName;
+                nameBox.Location = new Point(12, 12);
+                nameBox.Size = new Size(316, 23);
+                nameBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+                okButton.Text = "Rename";
+                okButton.DialogResult = DialogResult.OK;
+                okButton.Location = new Point(168, 52);
+                okButton.Size = new Size(76, 28);
+
+                cancelButton.Text = "Cancel";
+                cancelButton.DialogResult = DialogResult.Cancel;
+                cancelButton.Location = new Point(252, 52);
+                cancelButton.Size = new Size(76, 28);
+
+                dialog.Controls.Add(nameBox);
+                dialog.Controls.Add(okButton);
+                dialog.Controls.Add(cancelButton);
+                dialog.AcceptButton = okButton;
+                dialog.CancelButton = cancelButton;
+                nameBox.SelectAll();
+
+                return dialog.ShowDialog(this) == DialogResult.OK ? nameBox.Text.Trim() : null;
+            }
+        }
+
+        private void ChangeSelectedExtensionMode()
+        {
+            if (lvInstances.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("Please select an instance to change.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            InstanceInfo info = lvInstances.SelectedItems[0].Tag as InstanceInfo;
+            if (info == null) return;
+
+            DialogResult choice = MessageBox.Show(
+                string.Format("Choose extension storage for '{0}'.\n\nYes: Shared with Main (vscode\\data\\extensions)\nNo: Isolated (this instance's extensions folder)\n\nThe change applies to the next launch. A running VS Code window must be restarted to use the new mode. Existing local extensions are kept.", info.Name),
+                "Change Extension Mode",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+            if (choice == DialogResult.Cancel) return;
+
+            string newMode = choice == DialogResult.Yes ? "shared" : "isolated";
+            string newDisplayMode = choice == DialogResult.Yes ? "Shared" : "Isolated (Custom)";
+            string oldJson = null;
+            string oldBatch = null;
+            bool localExtensionsCreated = false;
+
+            try
+            {
+                oldJson = File.ReadAllText(info.JsonPath);
+                oldBatch = File.ReadAllText(info.BatPath);
+                if (newMode != "shared")
+                {
+                    string extensionsDir = Path.Combine(info.DirectoryPath, "extensions");
+                    localExtensionsCreated = !Directory.Exists(extensionsDir);
+                    Directory.CreateDirectory(extensionsDir);
+                }
+
+                string updatedJson = ReplaceJsonStringProperty(oldJson, "extensionMode", newMode);
+                File.WriteAllText(info.BatPath, BuildLaunchScript(newMode == "shared"), new UTF8Encoding(false));
+                File.WriteAllText(info.JsonPath, updatedJson, new UTF8Encoding(false));
+
+                lblStatus.Text = string.Format("Extension mode for '{0}' changed to {1}.", info.Name, newDisplayMode);
+                RefreshInstances();
+                SelectInstanceByName(info.Name);
+            }
+            catch (Exception ex)
+            {
+                string rollbackError = null;
+                try
+                {
+                    if (oldBatch != null) File.WriteAllText(info.BatPath, oldBatch, new UTF8Encoding(false));
+                    if (oldJson != null) File.WriteAllText(info.JsonPath, oldJson, new UTF8Encoding(false));
+                    if (localExtensionsCreated)
+                    {
+                        string extensionsDir = Path.Combine(info.DirectoryPath, "extensions");
+                        if (Directory.Exists(extensionsDir) && Directory.GetFileSystemEntries(extensionsDir).Length == 0)
+                            Directory.Delete(extensionsDir);
+                    }
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackError = "\n\nCould not fully restore the previous settings: " + rollbackException.Message;
+                }
+                MessageBox.Show("Failed to change extension mode: " + ex.Message + rollbackError, "Extension Mode Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void SelectInstanceByName(string name)
+        {
+            foreach (ListViewItem item in lvInstances.Items)
+            {
+                if (item.Text.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.Selected = true;
+                    item.EnsureVisible();
+                    break;
+                }
+            }
+        }
+
+        private string ReplaceJsonStringProperty(string json, string propertyName, string value)
+        {
+            Regex property = new Regex("\"" + Regex.Escape(propertyName) + "\"\\s*:\\s*\"(?:\\\\.|[^\"\\\\])*\"");
+            if (!property.IsMatch(json))
+                throw new InvalidDataException("Instance metadata does not contain the '" + propertyName + "' field.");
+
+            return property.Replace(json, delegate(Match match)
+            {
+                return "\"" + propertyName + "\": \"" + EscapeJsonString(value) + "\"";
+            }, 1);
+        }
+
+        private string EscapeJsonString(string value)
+        {
+            StringBuilder escaped = new StringBuilder();
+            foreach (char character in value)
+            {
+                switch (character)
+                {
+                    case '"': escaped.Append("\\\""); break;
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '\b': escaped.Append("\\b"); break;
+                    case '\f': escaped.Append("\\f"); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '\t': escaped.Append("\\t"); break;
+                    default:
+                        if (character < 0x20)
+                            escaped.AppendFormat("\\u{0:x4}", (int)character);
+                        else
+                            escaped.Append(character);
+                        break;
+                }
+            }
+            return escaped.ToString();
+        }
+
+        private string BuildLaunchScript(bool useSharedExtensions)
+        {
+            string extensionsDirectory = useSharedExtensions
+                ? @"%~dp0..\vscode\data\extensions"
+                : @"%~dp0extensions";
+            return "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"" + extensionsDirectory + "\" %*\r\n";
+        }
+
         private void CreateInstance()
         {
             string name = txtNewName.Text.Trim();
@@ -1152,7 +1414,7 @@ namespace VSLauncher
             else if (rbExtIsolatedCopy.Checked) extMode = "isolated-copy";
 
             bool cloneProfile = rbProfileClone.Checked;
-            string cloneSource = cbCloneSource.SelectedItem as string;
+            InstanceInfo cloneSource = cbCloneSource.SelectedItem as InstanceInfo;
 
             bool launchNow = chkLaunchNow.Checked;
             bool makeShortcut = chkCreateShortcut.Checked;
@@ -1169,7 +1431,7 @@ namespace VSLauncher
                     string batContent = "";
                     if (extMode == "shared")
                     {
-                        batContent = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\vscode\\data\\extensions\" %*\r\n";
+                        batContent = BuildLaunchScript(true);
                     }
                     else
                     {
@@ -1181,7 +1443,7 @@ namespace VSLauncher
                             CopyDirectoryRecursive(sharedExtDir, instanceExtDir);
                         }
 
-                        batContent = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0extensions\" %*\r\n";
+                        batContent = BuildLaunchScript(false);
                     }
 
                     string batPath = Path.Combine(targetDir, "launch.bat");
@@ -1193,9 +1455,9 @@ namespace VSLauncher
                     File.WriteAllText(Path.Combine(targetDir, "instance.json"), json);
 
                     // Profile cloning
-                    if (cloneProfile && !string.IsNullOrEmpty(cloneSource))
+                    if (cloneProfile && cloneSource != null)
                     {
-                        string srcUserData = Path.Combine(rootDir, cloneSource, "user-data");
+                        string srcUserData = Path.Combine(cloneSource.DirectoryPath, "user-data");
                         if (Directory.Exists(srcUserData))
                         {
                             CopyDirectoryRecursive(srcUserData, userDataDir);
