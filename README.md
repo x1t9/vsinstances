@@ -2,7 +2,7 @@
 
 VS Launcher v1.1.1 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder, including its own sign-ins and extension session data, and can use either the shared extension installation folder or its own local extensions folder.
 
-Version 1.1 fixes portable-mode data overriding `--user-data-dir` and `--extensions-dir`. On first launch, the launcher safely copies missing main-profile and shared-extension files from the old `vscode/data/` folder, then moves that folder to `.vscode-data-legacy-backup/` so VS Code honors each instance's paths. Version 1.1.1 also handles deeply nested extension paths during this migration. Existing instance data is left in place.
+Version 1.1 fixes portable-mode data overriding `--user-data-dir` and `--extensions-dir`. On first launch, the launcher safely copies missing main-profile and shared-extension files from the old `vscode/data/` folder, then moves that folder to `.vscode-data-legacy-backup/` so VS Code honors each instance's paths. Version 1.1.1 also handles deeply nested extension paths and retries partial migrations without overwriting files. If a previous v1.1 migration failed, run v1.1.1 to retry it.
 
 ## Install and start
 

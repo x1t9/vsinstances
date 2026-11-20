@@ -2,7 +2,7 @@
 
 ## v1.1.1
 
-- Fix migration failures on deeply nested VS Code extension paths by using Robocopy's long-path-capable tree copy while preserving existing destination files.
+- Fix migration failures on deeply nested VS Code extension paths by using Robocopy's long-path-capable tree copy, preserving existing destination files, and retrying incomplete migrations safely.
 
 ## v1.1.0
 
