@@ -3,6 +3,7 @@ vscode/
 vscode_update_temp/
 vscode_portable_temp.zip
 vscode_update.zip
+.vscode-data-legacy-backup*/
 
 # Ignore instance personal data, caches, workspaces & isolated extension downloads
 **/user-data/

@@ -1,6 +1,8 @@
 # VS Launcher
 
-VS Launcher is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder and can use either the main VS Code extensions folder or its own local extensions folder.
+VS Launcher v1.1 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder, including its own sign-ins and extension session data, and can use either the shared extension installation folder or its own local extensions folder.
+
+Version 1.1 fixes portable-mode data overriding `--user-data-dir` and `--extensions-dir`. On first launch, the launcher safely copies missing main-profile and shared-extension files from the old `vscode/data/` folder, then moves that folder to `.vscode-data-legacy-backup/` so VS Code honors each instance's paths. Existing instance data is left in place.
 
 ## Install and start
 
@@ -16,7 +18,7 @@ The Instances list shows the detected instances and their extension mode. Select
 
 - **Launch** starts the selected instance. Double-clicking an instance does the same.
 - **Rename Selected** changes the instance's display name in the launcher and its metadata. Its folder, profile, and existing shortcuts are left in place.
-- **Change Extension Mode** chooses between **Shared with Main** (`vscode/data/extensions`) and **Isolated (Custom)** (the instance's `extensions/` folder). Switching modes does not delete either extension folder; existing local extensions remain available if you switch back.
+- **Change Extension Mode** chooses between **Shared with Main** (the root `extensions/` folder) and **Isolated (Custom)** (the instance's `extensions/` folder). Switching modes does not delete either extension folder; existing local extensions remain available if you switch back.
 - **Folder** opens the instance folder, **Shortcut** creates a desktop shortcut, and **Delete** permanently removes the selected instance and its user data.
 - **Refresh** rescans instances and checks for VS Code updates.
 
@@ -27,7 +29,8 @@ To create an instance, enter a name, choose its extension mode, and optionally c
 ## Files and data
 
 - `Launcher.exe` is the VS Launcher application.
-- `vscode/` contains the downloaded portable VS Code core and shared main profile/extensions. It is not included in the repository or portable package.
+- `vscode/` contains the downloaded VS Code core. It is not included in the repository or portable package.
+- Root `user-data/` and `extensions/` contain the main profile and shared extension installations. Each instance's `user-data/` contains its own settings, authentication and extension session data.
 - Each instance folder contains `launch.bat` and `instance.json`; `user-data/` and optional `extensions/` are created locally and are ignored by Git.
 - `_template/launch.bat` is a sample launch script.
 
@@ -44,10 +47,11 @@ The project targets .NET Framework 4.8 and restores its reference assemblies thr
 To build the installer after building `Launcher.csproj`, run:
 
 ```powershell
+Copy-Item bin\Release\net48\Launcher.exe Launcher.exe
 dotnet build installer/VSLauncherSetup.csproj -c Release
 ```
 
-The installer project embeds the root `Launcher.exe` as its payload.
+The installer project embeds the root `Launcher.exe` as its payload. The built installer is written to `installer/bin/Release/net48/VSLauncherSetup.exe`.
 
 ## License
 

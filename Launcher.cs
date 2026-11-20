@@ -58,7 +58,27 @@ namespace VSLauncher
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            MainForm mainForm;
+            try
+            {
+                mainForm = new MainForm();
+            }
+            catch (IOException ex)
+            {
+                MessageBox.Show("Could not prepare isolated VS Code data: " + ex.Message, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                MessageBox.Show("Could not prepare isolated VS Code data: " + ex.Message, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            catch (System.Security.SecurityException ex)
+            {
+                MessageBox.Show("Could not prepare isolated VS Code data: " + ex.Message, "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            Application.Run(mainForm);
         }
 
         private static bool IsAdministrator()
@@ -155,7 +175,9 @@ namespace VSLauncher
             rootDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
             vscodeDir = Path.Combine(rootDir, "vscode");
             codeExePath = Path.Combine(vscodeDir, "Code.exe");
-            sharedExtDir = Path.Combine(vscodeDir, "data", "extensions");
+            sharedExtDir = Path.Combine(rootDir, "extensions");
+
+            PrepareIsolatedUserData();
 
             InitializeUI();
             LoadIcon();
@@ -169,7 +191,7 @@ namespace VSLauncher
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher (Administrator)";
+            this.Text = "VS Launcher v1.1 (Administrator)";
             this.Size = new Size(930, 550);
             this.MinimumSize = new Size(840, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -195,7 +217,7 @@ namespace VSLauncher
 
             lblTitle = new Label
             {
-                Text = "VS Launcher",
+                Text = "VS Launcher v1.1",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(0, 9),
@@ -937,7 +959,7 @@ namespace VSLauncher
                     try
                     {
                         string batContent = (extMode == "Shared")
-                            ? "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\vscode\\data\\extensions\" %*\r\n"
+                            ? "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n"
                             : "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0extensions\" %*\r\n";
                         File.WriteAllText(batPath, batContent);
                         hasBat = true;
@@ -1057,8 +1079,8 @@ namespace VSLauncher
 
             try
             {
-                string mainUserData = Path.Combine(vscodeDir, "data", "user-data");
-                string mainExt = Path.Combine(vscodeDir, "data", "extensions");
+                string mainUserData = Path.Combine(rootDir, "user-data");
+                string mainExt = sharedExtDir;
                 Directory.CreateDirectory(mainUserData);
                 Directory.CreateDirectory(mainExt);
 
@@ -1377,9 +1399,67 @@ namespace VSLauncher
         private string BuildLaunchScript(bool useSharedExtensions)
         {
             string extensionsDirectory = useSharedExtensions
-                ? @"%~dp0..\vscode\data\extensions"
+                ? @"%~dp0..\extensions"
                 : @"%~dp0extensions";
             return "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"" + extensionsDirectory + "\" %*\r\n";
+        }
+
+        private void PrepareIsolatedUserData()
+        {
+            string portableDataDir = Path.Combine(vscodeDir, "data");
+            string mainUserDataDir = Path.Combine(rootDir, "user-data");
+            Directory.CreateDirectory(mainUserDataDir);
+            Directory.CreateDirectory(sharedExtDir);
+
+            if (Directory.Exists(portableDataDir))
+            {
+                string legacyUserDataDir = Path.Combine(portableDataDir, "user-data");
+                string legacyExtensionsDir = Path.Combine(portableDataDir, "extensions");
+                if (Directory.Exists(legacyUserDataDir))
+                    CopyDirectoryContentsIfMissing(legacyUserDataDir, mainUserDataDir);
+                if (Directory.Exists(legacyExtensionsDir))
+                    CopyDirectoryContentsIfMissing(legacyExtensionsDir, sharedExtDir);
+
+                string backupDir = Path.Combine(rootDir, ".vscode-data-legacy-backup");
+                int suffix = 1;
+                while (Directory.Exists(backupDir) || File.Exists(backupDir))
+                {
+                    backupDir = Path.Combine(rootDir, ".vscode-data-legacy-backup-" + suffix);
+                    suffix++;
+                }
+                Directory.Move(portableDataDir, backupDir);
+            }
+
+            string oldSharedExtensionPath = @"%~dp0..\vscode\data\extensions";
+            string newSharedExtensionPath = @"%~dp0..\extensions";
+            foreach (string instanceDir in Directory.GetDirectories(rootDir))
+            {
+                string launchScript = Path.Combine(instanceDir, "launch.bat");
+                if (!File.Exists(launchScript)) continue;
+
+                string contents = File.ReadAllText(launchScript);
+                string updatedContents = Regex.Replace(contents, Regex.Escape(oldSharedExtensionPath),
+                    newSharedExtensionPath, RegexOptions.IgnoreCase);
+                if (!contents.Equals(updatedContents, StringComparison.Ordinal))
+                    File.WriteAllText(launchScript, updatedContents, new UTF8Encoding(false));
+            }
+        }
+
+        private void CopyDirectoryContentsIfMissing(string sourceDir, string targetDir)
+        {
+            Directory.CreateDirectory(targetDir);
+            foreach (string sourceFile in Directory.GetFiles(sourceDir))
+            {
+                string targetFile = Path.Combine(targetDir, Path.GetFileName(sourceFile));
+                if (!File.Exists(targetFile) && !Directory.Exists(targetFile))
+                    File.Copy(sourceFile, targetFile);
+            }
+            foreach (string sourceSubDir in Directory.GetDirectories(sourceDir))
+            {
+                string targetSubDir = Path.Combine(targetDir, Path.GetFileName(sourceSubDir));
+                if (!File.Exists(targetSubDir))
+                    CopyDirectoryContentsIfMissing(sourceSubDir, targetSubDir);
+            }
         }
 
         private void CreateInstance()
@@ -1747,8 +1827,8 @@ namespace VSLauncher
 
                         CopyUpdateFilesSafe(tempExtract, vscodeDir);
 
-                        Directory.CreateDirectory(Path.Combine(vscodeDir, "data", "extensions"));
-                        Directory.CreateDirectory(Path.Combine(vscodeDir, "data", "user-data"));
+                        Directory.CreateDirectory(sharedExtDir);
+                        Directory.CreateDirectory(Path.Combine(rootDir, "user-data"));
 
                         try { File.Delete(tempZip); } catch { }
                         try { Directory.Delete(tempExtract, true); } catch { }

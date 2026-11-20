@@ -75,7 +75,7 @@ namespace VSLauncherInstaller
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher Setup";
+            this.Text = "VS Launcher Setup v1.1";
             this.Size = new Size(540, 420);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -95,7 +95,7 @@ namespace VSLauncherInstaller
 
             Label lblTitle = new Label
             {
-                Text = "VS Launcher Setup",
+                Text = "VS Launcher Setup v1.1",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(14, 10),
@@ -104,7 +104,7 @@ namespace VSLauncherInstaller
 
             Label lblSubtitle = new Label
             {
-                Text = "Install portable multi-instance VS Code manager",
+                Text = "Install VS Launcher v1.1 with isolated instance profiles",
                 ForeColor = Color.FromArgb(170, 170, 170),
                 Font = new Font("Segoe UI", 8.5F),
                 Location = new Point(16, 36),
@@ -315,13 +315,13 @@ namespace VSLauncherInstaller
                 // 2. Create _template folder & launch.bat
                 string templateDir = Path.Combine(dest, "_template");
                 Directory.CreateDirectory(templateDir);
-                string templateBat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\vscode\\data\\extensions\" %*\r\n";
+                string templateBat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n";
                 File.WriteAllText(Path.Combine(templateDir, "launch.bat"), templateBat);
 
                 // 3. Create instance1 folder, launch.bat & instance.json
                 string inst1Dir = Path.Combine(dest, "instance1");
                 Directory.CreateDirectory(inst1Dir);
-                string inst1Bat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\vscode\\data\\extensions\" %*\r\n";
+                string inst1Bat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n";
                 File.WriteAllText(Path.Combine(inst1Dir, "launch.bat"), inst1Bat);
 
                 string inst1Json = "{\r\n  \"name\": \"instance1\",\r\n  \"extensionMode\": \"shared\",\r\n  \"createdAt\": \"" + DateTime.UtcNow.ToString("o") + "\"\r\n}\r\n";
@@ -332,7 +332,7 @@ namespace VSLauncherInstaller
                     + "Welcome to VS Launcher! To get started:\r\n"
                     + "1. Launch Launcher.exe\r\n"
                     + "2. Click 'Install VS Code' in the top-right header to automatically download and unpack the portable VS Code core.\r\n"
-                    + "3. Create or launch instances with shared or isolated extensions.\r\n\r\n"
+                    + "3. Create or launch instances; each instance has separate settings, sign-ins, and extension session data.\r\n\r\n"
                     + "Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
                 File.WriteAllText(Path.Combine(dest, "README.md"), readmeContent);
 
