@@ -191,7 +191,7 @@ namespace VSLauncher
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher v1.1.1 (Administrator)";
+            this.Text = "VS Launcher v1.2.0 (Administrator)";
             this.Size = new Size(930, 550);
             this.MinimumSize = new Size(840, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -217,7 +217,7 @@ namespace VSLauncher
 
             lblTitle = new Label
             {
-                Text = "VS Launcher v1.1.1",
+                Text = "VS Launcher v1.2.0",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(0, 9),
@@ -920,6 +920,9 @@ namespace VSLauncher
 
                 string instanceName = dirName;
                 string extMode = "Shared";
+                string detectedJsonMode = "shared";
+                string batContent = hasBat ? ReadAllTextSafe(batPath) : null;
+
                 if (hasJson)
                 {
                     try
@@ -928,44 +931,54 @@ namespace VSLauncher
                         Match nameMatch = Regex.Match(json, "\"name\"\\s*:\\s*\"([^\"\\\\]*)\"");
                         if (nameMatch.Success && !string.IsNullOrWhiteSpace(nameMatch.Groups[1].Value))
                             instanceName = nameMatch.Groups[1].Value;
-                        if (json.Contains("\"isolated-copy\"")) extMode = "Isolated (Copy)";
-                        else if (json.Contains("\"isolated-empty\"")) extMode = "Isolated (Empty)";
-                        else if (json.Contains("\"isolated\"")) extMode = "Isolated (Custom)";
-                        else if (json.Contains("\"shared\"")) extMode = "Shared";
+
+                        if (json.Contains("\"isolated-copy\"")) { extMode = "Isolated (Copy)"; detectedJsonMode = "isolated-copy"; }
+                        else if (json.Contains("\"isolated-empty\"")) { extMode = "Isolated (Empty)"; detectedJsonMode = "isolated-empty"; }
+                        else if (json.Contains("\"isolated\"")) { extMode = "Isolated (Custom)"; detectedJsonMode = "isolated"; }
+                        else if (json.Contains("\"shared\"")) { extMode = "Shared"; detectedJsonMode = "shared"; }
                     }
                     catch { }
                 }
                 else if (hasBat)
                 {
-                    string batContent = File.ReadAllText(batPath);
-                    if (batContent.IndexOf(@"vscode\data\extensions", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (IsSharedExtensionsScript(batContent))
+                    {
                         extMode = "Shared";
+                        detectedJsonMode = "shared";
+                    }
                     else
+                    {
                         extMode = "Isolated (Empty)";
+                        detectedJsonMode = "isolated-empty";
+                    }
 
                     try
                     {
-                        string jsonMode = (extMode == "Shared") ? "shared" : "isolated-empty";
                         string genJson = string.Format("{{\r\n  \"name\": \"{0}\",\r\n  \"extensionMode\": \"{1}\",\r\n  \"createdAt\": \"{2}\"\r\n}}\r\n",
-                            dirName, jsonMode, DateTime.UtcNow.ToString("o"));
+                            dirName, detectedJsonMode, DateTime.UtcNow.ToString("o"));
                         File.WriteAllText(jsonPath, genJson);
                         hasJson = true;
                     }
                     catch { }
                 }
 
-                if (!hasBat)
+                bool useSharedExtensions = extMode == "Shared";
+                string canonicalBat = BuildLaunchScript(useSharedExtensions);
+                if (useSharedExtensions)
+                    Directory.CreateDirectory(sharedExtDir);
+                else
+                    Directory.CreateDirectory(Path.Combine(dir, "extensions"));
+
+                try
                 {
-                    try
+                    if (!hasBat || !ScriptUsesExpectedIsolation(batContent, useSharedExtensions))
                     {
-                        string batContent = (extMode == "Shared")
-                            ? "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n"
-                            : "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0extensions\" %*\r\n";
-                        File.WriteAllText(batPath, batContent);
+                        File.WriteAllText(batPath, canonicalBat, new UTF8Encoding(false));
+                        batContent = canonicalBat;
                         hasBat = true;
                     }
-                    catch { }
                 }
+                catch { }
 
                 DateTime lastMod = Directory.GetLastWriteTime(dir);
 
@@ -1079,6 +1092,7 @@ namespace VSLauncher
 
             try
             {
+                EnsureIsolatedVSCodeDataReady();
                 string mainUserData = Path.Combine(rootDir, "user-data");
                 string mainExt = sharedExtDir;
                 Directory.CreateDirectory(mainUserData);
@@ -1087,7 +1101,7 @@ namespace VSLauncher
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = codeExePath,
-                    Arguments = string.Format("--user-data-dir \"{0}\" --extensions-dir \"{1}\"", mainUserData, mainExt),
+                    Arguments = string.Format("--user-data-dir \"{0}\" --extensions-dir \"{1}\" --new-window", mainUserData, mainExt),
                     WorkingDirectory = vscodeDir,
                     UseShellExecute = true
                 };
@@ -1127,6 +1141,19 @@ namespace VSLauncher
 
             try
             {
+                EnsureIsolatedVSCodeDataReady();
+                bool useSharedExtensions = info.ExtensionMode == "Shared";
+                Directory.CreateDirectory(Path.Combine(info.DirectoryPath, "user-data"));
+                if (useSharedExtensions)
+                    Directory.CreateDirectory(sharedExtDir);
+                else
+                    Directory.CreateDirectory(Path.Combine(info.DirectoryPath, "extensions"));
+
+                string canonicalBat = BuildLaunchScript(useSharedExtensions);
+                string currentBat = ReadAllTextSafe(info.BatPath);
+                if (!ScriptUsesExpectedIsolation(currentBat, useSharedExtensions))
+                    File.WriteAllText(info.BatPath, canonicalBat, new UTF8Encoding(false));
+
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = info.BatPath,
@@ -1293,7 +1320,7 @@ namespace VSLauncher
             if (info == null) return;
 
             DialogResult choice = MessageBox.Show(
-                string.Format("Choose extension storage for '{0}'.\n\nYes: Shared with Main (vscode\\data\\extensions)\nNo: Isolated (this instance's extensions folder)\n\nThe change applies to the next launch. A running VS Code window must be restarted to use the new mode. Existing local extensions are kept.", info.Name),
+                string.Format("Choose extension storage for '{0}'.\n\nYes: Shared with Main (root extensions folder)\nNo: Isolated (this instance's extensions folder)\n\nThe change applies to the next launch. A running VS Code window must be restarted to use the new mode. Existing local extensions are kept.", info.Name),
                 "Change Extension Mode",
                 MessageBoxButtons.YesNoCancel,
                 MessageBoxIcon.Question);
@@ -1401,7 +1428,56 @@ namespace VSLauncher
             string extensionsDirectory = useSharedExtensions
                 ? @"%~dp0..\extensions"
                 : @"%~dp0extensions";
-            return "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"" + extensionsDirectory + "\" %*\r\n";
+            return "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"" + extensionsDirectory + "\" --new-window %*\r\n";
+        }
+
+        private string ReadAllTextSafe(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? File.ReadAllText(path) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool IsSharedExtensionsScript(string batContent)
+        {
+            if (string.IsNullOrEmpty(batContent)) return true;
+
+            if (batContent.IndexOf(@"vscode\data\extensions", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            if (Regex.IsMatch(batContent, @"--extensions-dir\s+""?%~dp0\.\.[\\/]extensions""?", RegexOptions.IgnoreCase) ||
+                Regex.IsMatch(batContent, @"--extensions-dir\s+""?\.\.[\\/]extensions""?", RegexOptions.IgnoreCase))
+                return true;
+
+            if (Regex.IsMatch(batContent, @"--extensions-dir\s+""?%~dp0extensions""?", RegexOptions.IgnoreCase))
+                return false;
+
+            return false;
+        }
+
+        private bool ScriptUsesExpectedIsolation(string batContent, bool useSharedExtensions)
+        {
+            if (string.IsNullOrEmpty(batContent)) return false;
+            if (batContent.IndexOf(@"vscode\data", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            if (!Regex.IsMatch(batContent, @"--user-data-dir\s+""?%~dp0user-data""?", RegexOptions.IgnoreCase)) return false;
+            if (batContent.IndexOf("--new-window", StringComparison.OrdinalIgnoreCase) < 0) return false;
+
+            if (useSharedExtensions)
+                return Regex.IsMatch(batContent, @"--extensions-dir\s+""?%~dp0\.\.[\\/]extensions""?", RegexOptions.IgnoreCase);
+            return Regex.IsMatch(batContent, @"--extensions-dir\s+""?%~dp0extensions""?", RegexOptions.IgnoreCase);
+        }
+
+        private void EnsureIsolatedVSCodeDataReady()
+        {
+            PrepareIsolatedUserData();
+            string portableDataDir = Path.Combine(vscodeDir, "data");
+            if (Directory.Exists(portableDataDir))
+                throw new IOException("Portable VS Code data folder still exists at '" + portableDataDir + "'. Close all VS Code windows and retry so each instance can keep a separate login/session.");
         }
 
         private void PrepareIsolatedUserData()
@@ -1437,11 +1513,15 @@ namespace VSLauncher
                 string launchScript = Path.Combine(instanceDir, "launch.bat");
                 if (!File.Exists(launchScript)) continue;
 
-                string contents = File.ReadAllText(launchScript);
-                string updatedContents = Regex.Replace(contents, Regex.Escape(oldSharedExtensionPath),
-                    newSharedExtensionPath, RegexOptions.IgnoreCase);
-                if (!contents.Equals(updatedContents, StringComparison.Ordinal))
-                    File.WriteAllText(launchScript, updatedContents, new UTF8Encoding(false));
+                try
+                {
+                    string contents = File.ReadAllText(launchScript);
+                    string updatedContents = Regex.Replace(contents, Regex.Escape(oldSharedExtensionPath),
+                        newSharedExtensionPath, RegexOptions.IgnoreCase);
+                    if (!contents.Equals(updatedContents, StringComparison.Ordinal))
+                        File.WriteAllText(launchScript, updatedContents, new UTF8Encoding(false));
+                }
+                catch { }
             }
         }
 
@@ -1845,6 +1925,7 @@ namespace VSLauncher
 
                         Directory.CreateDirectory(sharedExtDir);
                         Directory.CreateDirectory(Path.Combine(rootDir, "user-data"));
+                        PrepareIsolatedUserData();
 
                         try { File.Delete(tempZip); } catch { }
                         try { Directory.Delete(tempExtract, true); } catch { }

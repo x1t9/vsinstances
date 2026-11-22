@@ -1,16 +1,16 @@
 # VS Launcher
 
-VS Launcher v1.1.1 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder, including its own sign-ins and extension session data, and can use either the shared extension installation folder or its own local extensions folder.
+VS Launcher v1.2.0 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder, including its own sign-ins, extension sessions, and VS Code account state, and can use either the shared extension installation folder or its own local extensions folder.
 
-Version 1.1 fixes portable-mode data overriding `--user-data-dir` and `--extensions-dir`. On first launch, the launcher safely copies missing main-profile and shared-extension files from the old `vscode/data/` folder, then moves that folder to `.vscode-data-legacy-backup/` so VS Code honors each instance's paths. Version 1.1.1 also handles deeply nested extension paths and retries partial migrations without overwriting files. If a previous v1.1 migration failed, run v1.1.1 to retry it.
+Version 1.2.0 improves session isolation and update safety. The launcher detects and migrates legacy portable `vscode/data` state before launch, normalizes instance launch scripts to use per-instance `--user-data-dir` and the correct extensions directory, and prevents the portable data folder from overriding isolated profiles. The installer can detect an existing VS Launcher installation or VS Code core, let you browse for the install directory if needed, and patch/update in place while preserving existing VS Code core, instances, profiles, extensions, and login sessions.
 
-## Install and start
+## Install and update
 
-- **Installer:** Run `VSLauncherSetup.exe`, choose an install folder, and launch VS Launcher from the created shortcut.
-- **Portable:** Extract `installer/VSLauncher-Portable.zip` to a writable folder and run `Launcher.exe`.
+- **Installer:** Run `VSLauncherSetup.exe`. It will try to detect an existing VS Launcher installation and preselect it; choose or browse to the correct install folder if needed, then install/update. Existing instances, user data, extensions, shortcuts, and VS Code core are preserved.
+- **Portable:** Extract `installer/VSLauncher-Portable.zip` to a writable folder and run `Launcher.exe`. To update a portable installation, replace `Launcher.exe` (and the installer package if desired) or run the v1.2.0 installer against the existing folder.
 - If the portable VS Code core is not installed yet, click **Install VS Code** in the top-right of the launcher. VS Launcher downloads and extracts the official Windows x64 archive into the `vscode/` subfolder.
 
-The installer and launcher request administrator privileges; approve the Windows UAC prompt. You can choose a writable install folder to keep the application files out of protected directories, although the launcher still requests elevation.
+The installer and launcher request administrator privileges; approve the Windows UAC prompt. Use a writable install folder to keep application data out of protected directories.
 
 ## Use instances
 
@@ -30,7 +30,7 @@ To create an instance, enter a name, choose its extension mode, and optionally c
 
 - `Launcher.exe` is the VS Launcher application.
 - `vscode/` contains the downloaded VS Code core. It is not included in the repository or portable package.
-- Root `user-data/` and `extensions/` contain the main profile and shared extension installations. Each instance's `user-data/` contains its own settings, authentication and extension session data.
+- Root `user-data/` and `extensions/` contain the main profile and shared extension installations. Each instance's `user-data/` contains its own settings, authentication, and extension session data.
 - Each instance folder contains `launch.bat` and `instance.json`; `user-data/` and optional `extensions/` are created locally and are ignored by Git.
 - `_template/launch.bat` is a sample launch script.
 

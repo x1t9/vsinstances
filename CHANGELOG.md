@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.0
+
+- Improve instance session isolation and login retention by detecting/removing legacy portable `vscode/data` before launch, normalizing instance launch scripts, and ensuring each launch uses the correct per-instance `--user-data-dir` and extension directory.
+- Make the installer update-safe: detect existing VS Launcher/VS Code installations, allow browsing for the install directory, patch/update in place, and preserve existing VS Code core, instances, profiles, extensions, and login sessions.
+- Rebuild and include the v1.2 launcher, setup installer, and portable archive.
+
 ## v1.1.1
 
 - Fix migration failures on deeply nested VS Code extension paths by using Robocopy's long-path-capable tree copy, preserving existing destination files, and retrying incomplete migrations safely.

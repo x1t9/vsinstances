@@ -75,8 +75,8 @@ namespace VSLauncherInstaller
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher Setup v1.1.1";
-            this.Size = new Size(540, 420);
+            this.Text = "VS Launcher Setup v1.2.0";
+            this.Size = new Size(540, 440);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = true;
@@ -95,7 +95,7 @@ namespace VSLauncherInstaller
 
             Label lblTitle = new Label
             {
-                Text = "VS Launcher Setup v1.1.1",
+                Text = "VS Launcher Setup v1.2.0",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(14, 10),
@@ -104,7 +104,7 @@ namespace VSLauncherInstaller
 
             Label lblSubtitle = new Label
             {
-                Text = "Install VS Launcher v1.1.1 with isolated instance profiles",
+                Text = "Install or update VS Launcher with isolated instance profiles",
                 ForeColor = Color.FromArgb(170, 170, 170),
                 Font = new Font("Segoe UI", 8.5F),
                 Location = new Point(16, 36),
@@ -137,7 +137,10 @@ namespace VSLauncherInstaller
             y += 22;
 
             // Default directory choice
-            string defaultDir = Directory.Exists(@"D:\") ? @"D:\VSInstances" : @"C:\VSInstances";
+            string detectedDir = DetectExistingInstallDirectory();
+            string defaultDir = !string.IsNullOrEmpty(detectedDir)
+                ? detectedDir
+                : (Directory.Exists(@"D:\") ? @"D:\VSInstances" : @"C:\VSInstances");
 
             txtPath = new TextBox
             {
@@ -175,14 +178,14 @@ namespace VSLauncherInstaller
             Panel pnlNote = new Panel
             {
                 Location = new Point(0, y),
-                Size = new Size(484, 52),
+                Size = new Size(484, 66),
                 BackColor = Color.FromArgb(235, 243, 250),
                 BorderStyle = BorderStyle.FixedSingle,
                 Padding = new Padding(10, 8, 10, 8)
             };
             Label lblNote = new Label
             {
-                Text = "ℹ VS Code core is not bundled to keep this installer ultra-light (~60 KB).\r\nWhen first run, click 'Install VS Code' in VS Launcher to download the portable core.",
+                Text = "ℹ Existing VS Launcher installations are updated in place, preserving VS Code core, instances, profiles, extensions, and login sessions.\r\nIf VS Code core is not found in the selected folder, install it from VS Launcher after setup.",
                 ForeColor = Color.FromArgb(20, 80, 140),
                 Font = new Font("Segoe UI", 8.25F),
                 Dock = DockStyle.Fill
@@ -194,7 +197,7 @@ namespace VSLauncherInstaller
             // Options
             chkDesktopShortcut = new CheckBox
             {
-                Text = "Create Desktop Shortcut for VS Launcher",
+                Text = "Create or update Desktop shortcut for VS Launcher",
                 Checked = true,
                 Location = new Point(4, y),
                 AutoSize = true
@@ -204,7 +207,7 @@ namespace VSLauncherInstaller
 
             chkStartMenuShortcut = new CheckBox
             {
-                Text = "Create Start Menu Shortcut",
+                Text = "Create or update Start Menu shortcut",
                 Checked = true,
                 Location = new Point(4, y),
                 AutoSize = true
@@ -214,7 +217,7 @@ namespace VSLauncherInstaller
 
             chkLaunchNow = new CheckBox
             {
-                Text = "Launch VS Launcher after installation",
+                Text = "Launch VS Launcher after installation/update",
                 Checked = true,
                 Location = new Point(4, y),
                 AutoSize = true
@@ -231,9 +234,23 @@ namespace VSLauncherInstaller
             };
             pnlBody.Controls.Add(progressBar);
 
+            string statusText = "Ready to install or update.";
+            try
+            {
+                if (Directory.Exists(defaultDir))
+                {
+                    bool hasLauncher = File.Exists(Path.Combine(defaultDir, "Launcher.exe"));
+                    bool hasVsCode = File.Exists(Path.Combine(defaultDir, "vscode", "Code.exe"));
+                    if (hasLauncher && hasVsCode) statusText = "Existing VS Launcher installation and VS Code core detected.";
+                    else if (hasLauncher) statusText = "Existing VS Launcher installation detected.";
+                    else if (hasVsCode) statusText = "Existing VS Code core detected in selected folder.";
+                }
+            }
+            catch { }
+
             lblStatus = new Label
             {
-                Text = "Ready to install.",
+                Text = statusText,
                 Location = new Point(0, y + 16),
                 AutoSize = true,
                 ForeColor = Color.Gray,
@@ -263,9 +280,9 @@ namespace VSLauncherInstaller
 
             btnInstall = new Button
             {
-                Text = "Install",
-                Location = new Point(pnlBottom.Width - 190, 10),
-                Size = new Size(88, 28),
+                Text = "Install / Update",
+                Location = new Point(pnlBottom.Width - 210, 10),
+                Size = new Size(108, 28),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 BackColor = Color.FromArgb(0, 122, 204),
                 ForeColor = Color.White,
@@ -275,6 +292,8 @@ namespace VSLauncherInstaller
             };
             btnInstall.FlatAppearance.BorderSize = 0;
             btnInstall.Click += (s, e) => PerformInstall();
+
+            txtPath.TextChanged += (s, e) => UpdateStatusForPath();
 
             pnlBottom.Controls.Add(btnInstall);
             pnlBottom.Controls.Add(btnCancel);
@@ -302,38 +321,54 @@ namespace VSLauncherInstaller
             btnBrowse.Enabled = false;
             txtPath.Enabled = false;
             progressBar.Visible = true;
-            lblStatus.Text = "Installing VS Launcher files...";
+            lblStatus.Text = "Installing/updating VS Launcher files...";
 
             try
             {
+                bool existingInstall = LooksLikeExistingInstall(dest);
+                bool hasAnyInstance = HasAnyInstance(dest);
+                bool hasVsCodeCore = File.Exists(Path.Combine(dest, "vscode", "Code.exe"));
+
                 Directory.CreateDirectory(dest);
 
-                // 1. Extract embedded Launcher.exe
+                // 1. Extract/update embedded Launcher.exe
                 string exePath = Path.Combine(dest, "Launcher.exe");
                 ExtractEmbeddedFile("Launcher.exe", exePath);
 
-                // 2. Create _template folder & launch.bat
+                // 2. Create/update _template folder & launch.bat
                 string templateDir = Path.Combine(dest, "_template");
                 Directory.CreateDirectory(templateDir);
-                string templateBat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n";
+                string templateBat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" --new-window %*\r\n";
                 File.WriteAllText(Path.Combine(templateDir, "launch.bat"), templateBat);
 
-                // 3. Create instance1 folder, launch.bat & instance.json
-                string inst1Dir = Path.Combine(dest, "instance1");
-                Directory.CreateDirectory(inst1Dir);
-                string inst1Bat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" %*\r\n";
-                File.WriteAllText(Path.Combine(inst1Dir, "launch.bat"), inst1Bat);
+                // 3. Create sample instance1 only for a fresh install with no existing instances
+                if (!hasAnyInstance)
+                {
+                    string inst1Dir = Path.Combine(dest, "instance1");
+                    Directory.CreateDirectory(inst1Dir);
 
-                string inst1Json = "{\r\n  \"name\": \"instance1\",\r\n  \"extensionMode\": \"shared\",\r\n  \"createdAt\": \"" + DateTime.UtcNow.ToString("o") + "\"\r\n}\r\n";
-                File.WriteAllText(Path.Combine(inst1Dir, "instance.json"), inst1Json);
+                    string inst1BatPath = Path.Combine(inst1Dir, "launch.bat");
+                    if (!File.Exists(inst1BatPath))
+                    {
+                        string inst1Bat = "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"%~dp0..\\extensions\" --new-window %*\r\n";
+                        File.WriteAllText(inst1BatPath, inst1Bat);
+                    }
 
-                // 4. Create README.md
+                    string inst1JsonPath = Path.Combine(inst1Dir, "instance.json");
+                    if (!File.Exists(inst1JsonPath))
+                    {
+                        string inst1Json = "{\r\n  \"name\": \"instance1\",\r\n  \"extensionMode\": \"shared\",\r\n  \"createdAt\": \"" + DateTime.UtcNow.ToString("o") + "\"\r\n}\r\n";
+                        File.WriteAllText(inst1JsonPath, inst1Json);
+                    }
+                }
+
+                // 4. Create/update README.md
                 string readmeContent = "# VS Launcher (Portable Multi-Instance Visual Studio Code)\r\n\r\n"
                     + "Welcome to VS Launcher! To get started:\r\n"
                     + "1. Launch Launcher.exe\r\n"
-                    + "2. Click 'Install VS Code' in the top-right header to automatically download and unpack the portable VS Code core.\r\n"
-                    + "3. Create or launch instances; each instance has separate settings, sign-ins, and extension session data.\r\n\r\n"
-                    + "Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
+                    + "2. If VS Code core is not installed, click 'Install VS Code' in the top-right header to download and unpack the portable VS Code core.\r\n"
+                    + "3. Create or launch instances; each instance keeps separate settings, sign-ins, and extension session data.\r\n\r\n"
+                    + "Updates preserve existing VS Code core, instances, profiles, extensions, and login sessions. Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
                 File.WriteAllText(Path.Combine(dest, "README.md"), readmeContent);
 
                 // 5. Create Desktop shortcut
@@ -351,12 +386,17 @@ namespace VSLauncherInstaller
                     CreateShortcut(Path.Combine(startMenu, "VS Launcher.lnk"), exePath, dest);
                 }
 
-                lblStatus.Text = "Installation complete!";
+                string action = existingInstall ? "updated" : "installed";
+                lblStatus.Text = existingInstall ? "Update complete." : "Installation complete.";
                 progressBar.Visible = false;
 
+                string postMessage = hasVsCodeCore
+                    ? "Existing VS Code core was detected and preserved."
+                    : "When VS Launcher opens, click '⬇ Install VS Code' in the top right if the portable VS Code core is not installed yet.";
+
                 MessageBox.Show(
-                    "VS Launcher has been successfully installed to:\n" + dest + "\n\nWhen VS Launcher opens, click '⬇ Install VS Code' in the top right to download and set up the portable core.",
-                    "Installation Complete",
+                    "VS Launcher has been successfully " + action + " at:\n" + dest + "\n\n" + postMessage + "\n\nExisting instances, profiles, extensions, and login sessions were preserved.",
+                    existingInstall ? "Update Complete" : "Installation Complete",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information
                 );
@@ -380,8 +420,94 @@ namespace VSLauncherInstaller
                 btnBrowse.Enabled = true;
                 txtPath.Enabled = true;
                 lblStatus.Text = "Installation failed: " + ex.Message;
-                MessageBox.Show("Failed to install: " + ex.Message, "Installation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Failed to install or update: " + ex.Message, "Installation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void UpdateStatusForPath()
+        {
+            string path = txtPath.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                lblStatus.Text = "Ready to install or update.";
+                return;
+            }
+
+            try
+            {
+                bool hasLauncher = File.Exists(Path.Combine(path, "Launcher.exe"));
+                bool hasVsCode = File.Exists(Path.Combine(path, "vscode", "Code.exe"));
+                bool hasInstances = HasAnyInstance(path);
+
+                if (hasLauncher && hasVsCode) lblStatus.Text = "Existing VS Launcher installation and VS Code core detected. Instances and login sessions will be preserved.";
+                else if (hasLauncher || hasInstances) lblStatus.Text = "Existing VS Launcher installation detected. Instances and login sessions will be preserved.";
+                else if (hasVsCode) lblStatus.Text = "Existing VS Code core detected in selected folder. It will be preserved.";
+                else lblStatus.Text = "Ready to install or update.";
+            }
+            catch
+            {
+                lblStatus.Text = "Ready to install or update.";
+            }
+        }
+
+        private string DetectExistingInstallDirectory()
+        {
+            try
+            {
+                string setupDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                string[] candidates = new string[]
+                {
+                    setupDir,
+                    @"D:\VSInstances",
+                    @"C:\VSInstances",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VSLauncher"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VSLauncher")
+                };
+
+                foreach (string candidate in candidates)
+                {
+                    if (LooksLikeExistingInstall(candidate))
+                        return candidate;
+                }
+
+                foreach (string candidate in candidates)
+                {
+                    if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(Path.Combine(candidate, "vscode", "Code.exe")))
+                        return candidate;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private bool LooksLikeExistingInstall(string path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return false;
+                if (File.Exists(Path.Combine(path, "Launcher.exe"))) return true;
+                if (File.Exists(Path.Combine(path, "VSLauncherSetup.exe")) && Directory.Exists(Path.Combine(path, "vscode"))) return true;
+                if (Directory.Exists(Path.Combine(path, "_template")) && (Directory.Exists(Path.Combine(path, "vscode")) || HasAnyInstance(path))) return true;
+                return HasAnyInstance(path);
+            }
+            catch { return false; }
+        }
+
+        private bool HasAnyInstance(string root)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return false;
+                foreach (string dir in Directory.GetDirectories(root))
+                {
+                    string name = Path.GetFileName(dir);
+                    string lower = name.ToLowerInvariant();
+                    if (lower == "vscode" || lower == "_template" || lower == "installer" || lower.StartsWith(".") || lower == "$recycle.bin") continue;
+                    if (File.Exists(Path.Combine(dir, "launch.bat")) || File.Exists(Path.Combine(dir, "instance.json"))) return true;
+                }
+            }
+            catch { }
+            return false;
         }
 
         private void ExtractEmbeddedFile(string resourceName, string outputPath)
