@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0
+
+- Launch each instance directly with absolute, instance-specific user-data and extension paths so VS Code authentication and editor state remain scoped to that instance across launches.
+- Clone only user preferences (settings, keybindings, tasks, and snippets); do not copy VS Code authentication/session storage into a new instance.
+- Preserve existing instance profiles and sign-in state during updates.
+
 ## v1.2.0
 
 - Improve instance session isolation and login retention by detecting/removing legacy portable `vscode/data` before launch, normalizing instance launch scripts, and ensuring each launch uses the correct per-instance `--user-data-dir` and extension directory.

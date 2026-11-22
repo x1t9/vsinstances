@@ -75,7 +75,7 @@ namespace VSLauncherInstaller
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher Setup v1.2.0";
+            this.Text = "VS Launcher Setup v1.3.0";
             this.Size = new Size(540, 440);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -95,7 +95,7 @@ namespace VSLauncherInstaller
 
             Label lblTitle = new Label
             {
-                Text = "VS Launcher Setup v1.2.0",
+                Text = "VS Launcher Setup v1.3.0",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(14, 10),
@@ -363,12 +363,12 @@ namespace VSLauncherInstaller
                 }
 
                 // 4. Create/update README.md
-                string readmeContent = "# VS Launcher (Portable Multi-Instance Visual Studio Code)\r\n\r\n"
+                string readmeContent = "# VS Launcher v1.3.0 (Portable Multi-Instance Visual Studio Code)\r\n\r\n"
                     + "Welcome to VS Launcher! To get started:\r\n"
                     + "1. Launch Launcher.exe\r\n"
                     + "2. If VS Code core is not installed, click 'Install VS Code' in the top-right header to download and unpack the portable VS Code core.\r\n"
-                    + "3. Create or launch instances; each instance keeps separate settings, sign-ins, and extension session data.\r\n\r\n"
-                    + "Updates preserve existing VS Code core, instances, profiles, extensions, and login sessions. Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
+                    + "3. Create or launch instances; each instance keeps its own persistent VS Code sign-in and extension session. Sign in once per instance.\r\n\r\n"
+                    + "Cloning a profile copies preferences only, not login/session data. If instances were created by cloning in v1.2.0, sign out of affected instances and sign in to each again once to establish independent sessions. Updates preserve existing VS Code core, instances, profiles, extensions, and login sessions. Select an instance and use Rename Selected to change its display name, or Change Extension Mode to switch between the main shared extensions and that instance's local extensions. Mode changes apply on the next launch; running VS Code windows must be restarted. Renaming does not move the instance folder or its existing shortcuts.\r\n";
                 File.WriteAllText(Path.Combine(dest, "README.md"), readmeContent);
 
                 // 5. Create Desktop shortcut

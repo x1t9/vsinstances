@@ -1,13 +1,13 @@
 # VS Launcher
 
-VS Launcher v1.2.0 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own user-data/profile folder, including its own sign-ins, extension sessions, and VS Code account state, and can use either the shared extension installation folder or its own local extensions folder.
+VS Launcher v1.3.0 is a Windows desktop app for managing portable Visual Studio Code instances. Each instance has its own persistent user-data/profile folder for VS Code sign-ins, extension sessions, and editor account state, and can use either the shared extension installation folder or its own local extensions folder.
 
-Version 1.2.0 improves session isolation and update safety. The launcher detects and migrates legacy portable `vscode/data` state before launch, normalizes instance launch scripts to use per-instance `--user-data-dir` and the correct extensions directory, and prevents the portable data folder from overriding isolated profiles. The installer can detect an existing VS Launcher installation or VS Code core, let you browse for the install directory if needed, and patch/update in place while preserving existing VS Code core, instances, profiles, extensions, and login sessions.
+Version 1.3.0 launches VS Code with absolute per-instance `--user-data-dir` paths and stops cloning authentication/session storage when copying profile preferences, avoiding shared copied credentials that can sign out another instance. Sign in separately in each instance once; its session is then retained in that instance's profile. Existing profiles and their session files are preserved during updates. If instances were created with **Clone from** in v1.2.0, their copied login credentials may still be shared; sign out of affected instances and sign in to each again once to establish independent sessions. Version 1.2.0 also detects and migrates legacy portable `vscode/data` state, normalizes old launch scripts, and provides an installer that updates existing installs in place.
 
 ## Install and update
 
 - **Installer:** Run `VSLauncherSetup.exe`. It will try to detect an existing VS Launcher installation and preselect it; choose or browse to the correct install folder if needed, then install/update. Existing instances, user data, extensions, shortcuts, and VS Code core are preserved.
-- **Portable:** Extract `installer/VSLauncher-Portable.zip` to a writable folder and run `Launcher.exe`. To update a portable installation, replace `Launcher.exe` (and the installer package if desired) or run the v1.2.0 installer against the existing folder.
+- **Portable:** Extract `installer/VSLauncher-Portable.zip` to a writable folder and run `Launcher.exe`. To update a portable installation, replace `Launcher.exe` (and the installer package if desired) or run the v1.3.0 installer against the existing folder.
 - If the portable VS Code core is not installed yet, click **Install VS Code** in the top-right of the launcher. VS Launcher downloads and extracts the official Windows x64 archive into the `vscode/` subfolder.
 
 The installer and launcher request administrator privileges; approve the Windows UAC prompt. Use a writable install folder to keep application data out of protected directories.
@@ -24,13 +24,13 @@ The Instances list shows the detected instances and their extension mode. Select
 
 Extension mode changes are saved immediately and apply the next time the instance is launched. If it is already running, close and relaunch its VS Code window to use the new extension folder. Shared mode uses the same extensions as **Open Main**.
 
-To create an instance, enter a name, choose its extension mode, and optionally clone a profile or create a desktop shortcut. **Isolated (Copy from Main)** copies the current main extensions once; later changes to the main extension folder are not synchronized.
+To create an instance, enter a name, choose its extension mode, and optionally clone profile preferences or create a desktop shortcut. Cloning copies settings, keybindings, tasks, and snippets only; authentication/session data is never copied, so sign in separately in each instance. **Isolated (Copy from Main)** copies the current main extensions once; later changes to the main extension folder are not synchronized.
 
 ## Files and data
 
 - `Launcher.exe` is the VS Launcher application.
 - `vscode/` contains the downloaded VS Code core. It is not included in the repository or portable package.
-- Root `user-data/` and `extensions/` contain the main profile and shared extension installations. Each instance's `user-data/` contains its own settings, authentication, and extension session data.
+- Root `user-data/` and `extensions/` contain the main profile and shared extension installations. Each instance's `user-data/` is its persistent, separate VS Code profile, including authentication and extension session data. The shared extensions folder contains extension files, not instance login state.
 - Each instance folder contains `launch.bat` and `instance.json`; `user-data/` and optional `extensions/` are created locally and are ignored by Git.
 - `_template/launch.bat` is a sample launch script.
 

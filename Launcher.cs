@@ -191,7 +191,7 @@ namespace VSLauncher
 
         private void InitializeUI()
         {
-            this.Text = "VS Launcher v1.2.0 (Administrator)";
+            this.Text = "VS Launcher v1.3.0 (Administrator)";
             this.Size = new Size(930, 550);
             this.MinimumSize = new Size(840, 480);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -217,7 +217,7 @@ namespace VSLauncher
 
             lblTitle = new Label
             {
-                Text = "VS Launcher v1.2.0",
+                Text = "VS Launcher v1.3.0",
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 13F, FontStyle.Bold),
                 Location = new Point(0, 9),
@@ -412,7 +412,7 @@ namespace VSLauncher
             };
             Label lblDescShared = new Label
             {
-                Text = "Uses vscode\\data\\extensions.",
+                Text = "Uses the root shared extensions folder.",
                 Location = new Point(24, 34),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(120, 120, 120),
@@ -476,7 +476,7 @@ namespace VSLauncher
 
             rbProfileClone = new RadioButton
             {
-                Text = "Clone from:",
+                Text = "Clone settings only:",
                 Location = new Point(8, 36),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8F, FontStyle.Regular),
@@ -485,8 +485,8 @@ namespace VSLauncher
 
             cbCloneSource = new ComboBox
             {
-                Location = new Point(95, 34),
-                Size = new Size(150, 21),
+                Location = new Point(125, 34),
+                Size = new Size(120, 21),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Enabled = false,
                 Font = new Font("Segoe UI", 8F)
@@ -1094,18 +1094,7 @@ namespace VSLauncher
             {
                 EnsureIsolatedVSCodeDataReady();
                 string mainUserData = Path.Combine(rootDir, "user-data");
-                string mainExt = sharedExtDir;
-                Directory.CreateDirectory(mainUserData);
-                Directory.CreateDirectory(mainExt);
-
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = codeExePath,
-                    Arguments = string.Format("--user-data-dir \"{0}\" --extensions-dir \"{1}\" --new-window", mainUserData, mainExt),
-                    WorkingDirectory = vscodeDir,
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
+                LaunchVSCodeProfile(mainUserData, sharedExtDir);
                 lblStatus.Text = "Main VS Code launched.";
             }
             catch (Exception ex)
@@ -1143,24 +1132,17 @@ namespace VSLauncher
             {
                 EnsureIsolatedVSCodeDataReady();
                 bool useSharedExtensions = info.ExtensionMode == "Shared";
-                Directory.CreateDirectory(Path.Combine(info.DirectoryPath, "user-data"));
-                if (useSharedExtensions)
-                    Directory.CreateDirectory(sharedExtDir);
-                else
-                    Directory.CreateDirectory(Path.Combine(info.DirectoryPath, "extensions"));
+                string userDataDir = Path.Combine(info.DirectoryPath, "user-data");
+                string extensionsDir = useSharedExtensions
+                    ? sharedExtDir
+                    : Path.Combine(info.DirectoryPath, "extensions");
 
                 string canonicalBat = BuildLaunchScript(useSharedExtensions);
                 string currentBat = ReadAllTextSafe(info.BatPath);
                 if (!ScriptUsesExpectedIsolation(currentBat, useSharedExtensions))
                     File.WriteAllText(info.BatPath, canonicalBat, new UTF8Encoding(false));
 
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = info.BatPath,
-                    WorkingDirectory = info.DirectoryPath,
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
+                LaunchVSCodeProfile(userDataDir, extensionsDir);
                 lblStatus.Text = string.Format("Launched: {0}", info.Name);
             }
             catch (Exception ex)
@@ -1431,6 +1413,27 @@ namespace VSLauncher
             return "@echo off\r\nstart \"\" \"%~dp0..\\vscode\\Code.exe\" --user-data-dir \"%~dp0user-data\" --extensions-dir \"" + extensionsDirectory + "\" --new-window %*\r\n";
         }
 
+        private void LaunchVSCodeProfile(string userDataDir, string extensionsDir)
+        {
+            Directory.CreateDirectory(userDataDir);
+            Directory.CreateDirectory(extensionsDir);
+
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = codeExePath,
+                Arguments = BuildVSCodeArguments(userDataDir, extensionsDir),
+                WorkingDirectory = vscodeDir,
+                UseShellExecute = false
+            };
+            Process.Start(psi);
+        }
+
+        private string BuildVSCodeArguments(string userDataDir, string extensionsDir)
+        {
+            return string.Format("--user-data-dir \"{0}\" --extensions-dir \"{1}\" --new-window",
+                Path.GetFullPath(userDataDir), Path.GetFullPath(extensionsDir));
+        }
+
         private string ReadAllTextSafe(string path)
         {
             try
@@ -1636,7 +1639,7 @@ namespace VSLauncher
                         string srcUserData = Path.Combine(cloneSource.DirectoryPath, "user-data");
                         if (Directory.Exists(srcUserData))
                         {
-                            CopyDirectoryRecursive(srcUserData, userDataDir);
+                            CopyProfilePreferences(srcUserData, userDataDir);
                         }
                     }
 
@@ -1665,12 +1668,11 @@ namespace VSLauncher
                         {
                             if (File.Exists(codeExePath))
                             {
-                                Process.Start(new ProcessStartInfo
-                                {
-                                    FileName = batPath,
-                                    WorkingDirectory = targetDir,
-                                    UseShellExecute = true
-                                });
+                                bool useSharedExtensions = extMode == "shared";
+                                string extensionsDir = useSharedExtensions
+                                    ? sharedExtDir
+                                    : Path.Combine(targetDir, "extensions");
+                                LaunchVSCodeProfile(userDataDir, extensionsDir);
                             }
                             else
                             {
@@ -1704,6 +1706,26 @@ namespace VSLauncher
                 string dest = Path.Combine(targetDir, Path.GetFileName(subDir));
                 CopyDirectoryRecursive(subDir, dest);
             }
+        }
+
+        private void CopyProfilePreferences(string sourceUserDataDir, string targetUserDataDir)
+        {
+            string sourceUserDir = Path.Combine(sourceUserDataDir, "User");
+            string targetUserDir = Path.Combine(targetUserDataDir, "User");
+            string[] preferenceFiles = { "settings.json", "keybindings.json", "tasks.json" };
+
+            foreach (string fileName in preferenceFiles)
+            {
+                string sourceFile = Path.Combine(sourceUserDir, fileName);
+                if (!File.Exists(sourceFile)) continue;
+
+                Directory.CreateDirectory(targetUserDir);
+                File.Copy(sourceFile, Path.Combine(targetUserDir, fileName), true);
+            }
+
+            string sourceSnippetsDir = Path.Combine(sourceUserDir, "snippets");
+            if (Directory.Exists(sourceSnippetsDir))
+                CopyDirectoryRecursive(sourceSnippetsDir, Path.Combine(targetUserDir, "snippets"));
         }
 
         private void CreateShortcutForInstance(string instanceName, string batPath, string workingDir)
